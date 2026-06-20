@@ -8,7 +8,7 @@ set -Eeuo pipefail
 PATH=/usr/local/bin:/usr/local/sbin:/bin:/sbin:/usr/bin:/usr/sbin:~/bin
 export PATH
 
-VERSION="0.2.0"
+VERSION="0.2.1"
 ORIGINAL_URL="${SSR_ORIGINAL_URL:-https://raw.githubusercontent.com/ToyoDAdoubiBackup/doubi/master/ssrmu.sh}"
 WORKDIR="${SSR_WORKDIR:-/root}"
 ORIGINAL_SCRIPT="${SSR_ORIGINAL_SCRIPT:-${WORKDIR}/ssrmu-origin.sh}"
@@ -16,6 +16,7 @@ PATCHED_SCRIPT="${SSR_PATCHED_SCRIPT:-${WORKDIR}/ssrmu.sh}"
 PY2_PREFIX="${PY2_PREFIX:-/opt/python2.7}"
 PY2_BIN="${PY2_PREFIX}/bin/python2.7"
 INIT_FILE="/etc/init.d/ssrmu"
+SERVICE_RELOAD_STAMP="/run/ssrmu2-service-reloaded"
 
 info(){ echo -e "\033[32m[INFO]\033[0m $*"; }
 warn(){ echo -e "\033[33m[WARN]\033[0m $*" >&2; }
@@ -226,16 +227,27 @@ patch_original(){
     -e 's#apt-get install -y vim unzip cron#apt-get install -y vim-tiny unzip cron net-tools iptables ca-certificates curl#g' \
     -e 's#yum install -y vim unzip crond net-tools#yum install -y vim-minimal unzip cronie net-tools iptables-services ca-certificates curl#g' \
     -e 's#yum install -y vim unzip crond#yum install -y vim-minimal unzip cronie net-tools iptables-services ca-certificates curl#g' \
+    -e 's#python_ver="python"#python_ver="/usr/local/bin/python"#g' \
+    -e 's#python_ver=python#python_ver=/usr/local/bin/python#g' \
     "${PATCHED_SCRIPT}"
 }
 
 patch_service(){
   [[ -f "${INIT_FILE}" ]] || return 0
-  sed -i \
-    -e 's#python_ver="python"#python_ver="/usr/local/bin/python"#g' \
-    -e 's#python_ver=python#python_ver=/usr/local/bin/python#g' \
-    "${INIT_FILE}" || true
+  local changed=0
+  if grep -Eq 'python_ver=("python"|python)([[:space:]]|$)' "${INIT_FILE}"; then
+    sed -i \
+      -e 's#python_ver="python"#python_ver="/usr/local/bin/python"#g' \
+      -e 's#python_ver=python#python_ver=/usr/local/bin/python#g' \
+      "${INIT_FILE}" || true
+    changed=1
+  fi
   chmod +x "${INIT_FILE}" || true
+  if exists systemctl && { [[ "${changed}" -eq 1 ]] || [[ ! -e "${SERVICE_RELOAD_STAMP}" ]]; }; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    mkdir -p "$(dirname "${SERVICE_RELOAD_STAMP}")" 2>/dev/null || true
+    touch "${SERVICE_RELOAD_STAMP}" 2>/dev/null || true
+  fi
 }
 
 service_patch_watch(){
