@@ -4,15 +4,13 @@ set -Eeuo pipefail
 PATH=/usr/local/bin:/usr/local/sbin:/bin:/sbin:/usr/bin:/usr/sbin:~/bin
 export PATH
 
-VERSION="0.1.0"
+VERSION="0.1.1"
 SSR_DIR="/usr/local/shadowsocksr"
 SSR_ZIP_URL="${SSR_ZIP_URL:-https://github.com/ToyoDAdoubiBackup/shadowsocksr/archive/manyuser.zip}"
 PY2_PREFIX="${PY2_PREFIX:-/opt/python2.7}"
 PY2_BIN="${PY2_PREFIX}/bin/python2.7"
-PYTHON_LINK="/usr/local/bin/python"
 INIT_FILE="/etc/init.d/ssrmu"
 LOG_FILE="${SSR_DIR}/ssserver.log"
-MUDB_FILE="${SSR_DIR}/mudb.json"
 API_FILE="${SSR_DIR}/userapiconfig.py"
 
 info(){ echo -e "\033[32m[INFO]\033[0m $*"; }
@@ -293,11 +291,13 @@ add_firewall_port(){
 }
 
 choose_method(){
-  echo "请选择加密方式:"
-  echo " 1 none  2 rc4  3 rc4-md5  4 rc4-md5-6"
-  echo " 5 aes-128-ctr  6 aes-192-ctr  7 aes-256-ctr"
-  echo " 8 aes-128-cfb  9 aes-192-cfb  10 aes-256-cfb"
-  echo " 14 salsa20  15 chacha20  16 chacha20-ietf"
+  {
+    echo "请选择加密方式:"
+    echo " 1 none  2 rc4  3 rc4-md5  4 rc4-md5-6"
+    echo " 5 aes-128-ctr  6 aes-192-ctr  7 aes-256-ctr"
+    echo " 8 aes-128-cfb  9 aes-192-cfb  10 aes-256-cfb"
+    echo " 14 salsa20  15 chacha20  16 chacha20-ietf"
+  } >&2
   read -r -p "(默认: 5 aes-128-ctr): " x; x="${x:-5}"
   case "$x" in
     1) echo none;; 2) echo rc4;; 3) echo rc4-md5;; 4) echo rc4-md5-6;; 5) echo aes-128-ctr;; 6) echo aes-192-ctr;; 7) echo aes-256-ctr;;
@@ -306,8 +306,10 @@ choose_method(){
 }
 
 choose_protocol(){
-  echo "请选择协议插件:"
-  echo " 1 origin  2 auth_sha1_v4  3 auth_aes128_md5  4 auth_aes128_sha1  5 auth_chain_a  6 auth_chain_b"
+  {
+    echo "请选择协议插件:"
+    echo " 1 origin  2 auth_sha1_v4  3 auth_aes128_md5  4 auth_aes128_sha1  5 auth_chain_a  6 auth_chain_b"
+  } >&2
   read -r -p "(默认: 3 auth_aes128_md5): " x; x="${x:-3}"
   case "$x" in
     1) echo origin;; 2) echo auth_sha1_v4;; 3) echo auth_aes128_md5;; 4) echo auth_aes128_sha1;; 5) echo auth_chain_a;; 6) echo auth_chain_b;; *) echo auth_aes128_md5;;
@@ -315,8 +317,10 @@ choose_protocol(){
 }
 
 choose_obfs(){
-  echo "请选择混淆插件:"
-  echo " 1 plain  2 http_simple  3 http_post  4 random_head  5 tls1.2_ticket_auth"
+  {
+    echo "请选择混淆插件:"
+    echo " 1 plain  2 http_simple  3 http_post  4 random_head  5 tls1.2_ticket_auth"
+  } >&2
   read -r -p "(默认: 1 plain): " x; x="${x:-1}"
   local obfs
   case "$x" in
@@ -380,10 +384,6 @@ uninstall_all(){
   update-rc.d -f ssrmu remove >/dev/null 2>&1 || true
   rm -rf "${SSR_DIR}" "${INIT_FILE}"
   info "SSR removed. Python2 compatibility runtime was kept intentionally."
-}
-
-show_status(){
-  [[ -x "${INIT_FILE}" ]] && "${INIT_FILE}" status || fatal "service is not installed"
 }
 
 view_log(){
