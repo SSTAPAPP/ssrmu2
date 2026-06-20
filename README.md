@@ -6,8 +6,10 @@ The goal is **not** to redesign the menu. The launcher keeps the original `ssrmu
 
 ## Quick Test
 
+Use `-O` so an old local copy is always overwritten:
+
 ```bash
-wget -N --no-check-certificate https://raw.githubusercontent.com/SSTAPAPP/ssrmu2/main/ssrmu-modern.sh
+wget --no-check-certificate -O ssrmu-modern.sh https://raw.githubusercontent.com/SSTAPAPP/ssrmu2/main/ssrmu-modern.sh
 chmod +x ssrmu-modern.sh
 bash ssrmu-modern.sh
 ```
@@ -25,9 +27,10 @@ Menu option `1` installs ShadowsocksR and creates the first user.
 - Prepares Python 2.7 compatibility without replacing `/usr/bin/python`.
 - Removes broken `/usr/local/bin/python*` symlink loops if an earlier test created them.
 - Installs minimal dependencies such as `unzip`, `cron`, `iptables`, `net-tools`, and certificates.
-- Patches the downloaded original script copy so `/usr/local/bin` is first in `PATH`.
+- Patches the downloaded runtime copy so `/usr/local/bin` is first in `PATH`.
 - Prevents the original script from failing on removed `python` package names.
-- Watches and patches `/etc/init.d/ssrmu` so `server.py` runs with `/usr/local/bin/python`.
+- Patches the generated `/etc/init.d/ssrmu` service to run with `/usr/local/bin/python`.
+- Runs `systemctl daemon-reload` when the generated service changes.
 - Adds a small systemd unit to restore legacy iptables rules on boot.
 
 ## User Choices
@@ -41,6 +44,8 @@ Obfs:       5 = tls1.2_ticket_auth
 ```
 
 When asked whether to use `_compatible` for `tls1.2_ticket_auth`, choose `y` for easier client compatibility testing.
+
+The original script expects integer GB values for total traffic. Use `1`, `2`, `10`, etc. Do not enter decimals such as `1.5`.
 
 ## External Source
 
