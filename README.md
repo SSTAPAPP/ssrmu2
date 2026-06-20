@@ -1,8 +1,8 @@
 # ssrmu2
 
-`ssrmu2` is a standalone modern-system manager for the legacy ShadowsocksR MuJSON server.
+`ssrmu2` is a compatibility launcher for the original Toyo `ssrmu.sh` ShadowsocksR MuJSON script.
 
-It is intended for fresh Debian/Ubuntu VPS images where the old `ssrmu.sh` workflow fails because modern distributions no longer ship Python 2 as `/usr/bin/python`.
+The goal is **not** to redesign the menu. The launcher keeps the original `ssrmu.sh` UI and flow, then fixes the runtime assumptions that break on modern systems such as Debian 13.
 
 ## Quick Test
 
@@ -12,15 +12,22 @@ chmod +x ssrmu-modern.sh
 bash ssrmu-modern.sh
 ```
 
+You should see the original menu title:
+
+```text
+ShadowsocksR MuJSON一键管理脚本 [v1.0.26]
+```
+
 Menu option `1` installs ShadowsocksR and creates the first user.
 
-## What It Does
+## What The Launcher Fixes
 
 - Prepares Python 2.7 compatibility without replacing `/usr/bin/python`.
+- Removes broken `/usr/local/bin/python*` symlink loops if an earlier test created them.
 - Installs minimal dependencies such as `unzip`, `cron`, `iptables`, `net-tools`, and certificates.
-- Downloads the SSR manyuser server archive and configures `mudbjson` mode.
-- Creates an `/etc/init.d/ssrmu` service that runs `server.py` with `/usr/local/bin/python`.
-- Adds iptables rules for each created user port.
+- Patches the downloaded original script copy so `/usr/local/bin` is first in `PATH`.
+- Prevents the original script from failing on removed `python` package names.
+- Watches and patches `/etc/init.d/ssrmu` so `server.py` runs with `/usr/local/bin/python`.
 - Adds a small systemd unit to restore legacy iptables rules on boot.
 
 ## User Choices
@@ -37,20 +44,20 @@ When asked whether to use `_compatible` for `tls1.2_ticket_auth`, choose `y` for
 
 ## External Source
 
-This repository no longer depends on `SSTAPAPP/doubi` or a branch inside that repo.
-
-By default the script downloads the SSR manyuser server archive from:
+By default this launcher downloads the original `ssrmu.sh` from Toyo's backup repo at runtime:
 
 ```text
-https://github.com/ToyoDAdoubiBackup/shadowsocksr/archive/manyuser.zip
+https://raw.githubusercontent.com/ToyoDAdoubiBackup/doubi/master/ssrmu.sh
 ```
 
 You can override it with your own mirror:
 
 ```bash
-SSR_ZIP_URL=https://example.com/manyuser.zip bash ssrmu-modern.sh
+SSR_ORIGINAL_URL=https://example.com/ssrmu.sh bash ssrmu-modern.sh
 ```
+
+The SSR server archive is still downloaded by the original script from its configured source.
 
 ## Notes
 
-The SSR server code itself is old Python 2 code. A full Python 3 migration would require maintaining a fork of the server implementation, so this project keeps Python 2.7 isolated under `/usr/local/bin` or `/opt/python2.7` and avoids touching `/usr/bin/python`.
+The SSR server code itself is old Python 2 code. A full Python 3 migration would require maintaining a fork of the server implementation, so this launcher keeps Python 2.7 isolated under `/usr/local/bin` or `/opt/python2.7` and avoids touching `/usr/bin/python`.
