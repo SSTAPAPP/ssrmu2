@@ -4,7 +4,7 @@ set -Eeuo pipefail
 PATH=/usr/local/bin:/usr/local/sbin:/bin:/sbin:/usr/bin:/usr/sbin:~/bin
 export PATH
 
-VERSION="0.1.1"
+VERSION="0.1.2"
 SSR_DIR="/usr/local/shadowsocksr"
 SSR_ZIP_URL="${SSR_ZIP_URL:-https://github.com/ToyoDAdoubiBackup/shadowsocksr/archive/manyuser.zip}"
 PY2_PREFIX="${PY2_PREFIX:-/opt/python2.7}"
@@ -33,6 +33,19 @@ load_os(){
 is_debian_like(){ [[ "${OS_ID} ${OS_LIKE}" == *debian* || "${OS_ID} ${OS_LIKE}" == *ubuntu* ]]; }
 is_rhel_like(){ [[ "${OS_ID} ${OS_LIKE}" == *rhel* || "${OS_ID} ${OS_LIKE}" == *fedora* || "${OS_ID} ${OS_LIKE}" == *centos* || "${OS_ID} ${OS_LIKE}" == *rocky* || "${OS_ID} ${OS_LIKE}" == *alma* ]]; }
 
+cleanup_python_link_loops(){
+  local f target resolved
+  for f in /usr/local/bin/python /usr/local/bin/python2 /usr/local/bin/python2.7; do
+    [[ -L "${f}" ]] || continue
+    target="$(readlink "${f}" 2>/dev/null || true)"
+    resolved="$(readlink -f "${f}" 2>/dev/null || true)"
+    if [[ -z "${resolved}" || "${resolved}" == "${f}" || "${target}" == "${f}" || "${target}" == python || "${target}" == python2 || "${target}" == python2.7 ]]; then
+      warn "removing broken Python compatibility link: ${f} -> ${target:-?}"
+      rm -f "${f}"
+    fi
+  done
+}
+
 install_base_deps(){
   if is_debian_like; then
     export DEBIAN_FRONTEND=noninteractive
@@ -55,31 +68,49 @@ install_base_deps(){
 
 python_is_py2(){
   local bin="$1"
-  [[ -x "${bin}" || -n "$(command -v "${bin}" 2>/dev/null)" ]] || return 1
-  "${bin}" - <<'PY' >/dev/null 2>&1
+  local resolved
+  resolved="$(readlink -f "${bin}" 2>/dev/null || true)"
+  [[ -n "${resolved}" && -x "${resolved}" ]] || return 1
+  "${resolved}" - <<'PY' >/dev/null 2>&1
 import sys
 raise SystemExit(0 if sys.version_info[0] == 2 else 1)
 PY
 }
 
 find_python2(){
-  local c r
-  for c in python python2.7 python2 /usr/bin/python2.7 /usr/local/bin/python2.7 "${PY2_BIN}"; do
-    if exists "${c}"; then
+  local c r resolved
+  cleanup_python_link_loops
+  for c in /usr/bin/python2.7 /usr/bin/python2 /bin/python2.7 /bin/python2 "${PY2_BIN}" python2.7 python2 python; do
+    if [[ -x "${c}" ]]; then
+      r="${c}"
+    elif exists "${c}"; then
       r="$(command -v "${c}")"
-      python_is_py2 "${r}" && echo "${r}" && return 0
-    elif [[ -x "${c}" ]]; then
-      python_is_py2 "${c}" && echo "${c}" && return 0
+    else
+      continue
     fi
+    resolved="$(readlink -f "${r}" 2>/dev/null || true)"
+    [[ -n "${resolved}" ]] || continue
+    case "${resolved}" in
+      /usr/local/bin/python|/usr/local/bin/python2|/usr/local/bin/python2.7) continue ;;
+    esac
+    python_is_py2 "${resolved}" && echo "${resolved}" && return 0
   done
   return 1
 }
 
 link_python2(){
   local py2="$1"
-  ln -sf "${py2}" /usr/local/bin/python
-  ln -sf "${py2}" /usr/local/bin/python2
-  ln -sf "${py2}" /usr/local/bin/python2.7
+  local resolved
+  resolved="$(readlink -f "${py2}" 2>/dev/null || true)"
+  [[ -n "${resolved}" && -x "${resolved}" ]] || fatal "invalid Python2 runtime: ${py2}"
+  case "${resolved}" in
+    /usr/local/bin/python|/usr/local/bin/python2|/usr/local/bin/python2.7) fatal "refusing to link Python runtime to compatibility link itself: ${resolved}" ;;
+  esac
+  python_is_py2 "${resolved}" || fatal "not a Python2 runtime: ${resolved}"
+  rm -f /usr/local/bin/python /usr/local/bin/python2 /usr/local/bin/python2.7
+  ln -s "${resolved}" /usr/local/bin/python
+  ln -s "${resolved}" /usr/local/bin/python2
+  ln -s "${resolved}" /usr/local/bin/python2.7
   info "Python runtime: $(/usr/local/bin/python --version 2>&1)"
 }
 
@@ -129,6 +160,7 @@ build_python2(){
 
 ensure_python2(){
   local py2
+  cleanup_python_link_loops
   if py2="$(find_python2 2>/dev/null)"; then link_python2 "${py2}"; return 0; fi
 
   if is_debian_like; then
