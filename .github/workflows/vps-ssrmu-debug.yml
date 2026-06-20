@@ -1,0 +1,84 @@
+name: VPS SSRMU Debug
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vps-ssrmu-debug.yml
+
+jobs:
+  debug-vps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in VPS_HOST VPS_PORT VPS_USER VPS_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing secret: ${name}"
+              missing=1
+            fi
+          done
+          exit "$missing"
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+
+      - name: Install SSH helper
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends sshpass openssh-client
+
+      - name: Run SSRMU service diagnostics
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh \
+            -p "${VPS_PORT}" \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=20 \
+            "${VPS_USER}@${VPS_HOST}" 'bash -s' <<'REMOTE'
+          set +e
+          echo "===== system ====="
+          date
+          uname -a
+          cat /etc/os-release 2>/dev/null || true
+          echo
+          echo "===== ssr files ====="
+          ls -ld /usr/local/shadowsocksr /etc/init.d/ssrmu /root/ssrmu-modern.sh /root/ssrmu.sh 2>/dev/null || true
+          echo
+          echo "===== reload and start ====="
+          systemctl daemon-reload 2>&1 || true
+          service ssrmu start 2>&1 || true
+          sleep 2
+          echo
+          echo "===== status ====="
+          systemctl status ssrmu --no-pager 2>&1 || service ssrmu status 2>&1 || true
+          echo
+          echo "===== process ====="
+          ps aux | grep -E 'server.py|shadowsocks|ssr' | grep -v grep || true
+          echo
+          echo "===== listen ====="
+          ss -lntup 2>/dev/null | grep -E 'python|ssr|shadowsocks' || true
+          echo
+          echo "===== config ====="
+          sed -n '1,220p' /usr/local/shadowsocksr/user-config.json 2>/dev/null || true
+          echo
+          echo "===== journal ====="
+          journalctl -u ssrmu -n 160 --no-pager 2>&1 || true
+          echo
+          echo "===== ssr log ====="
+          tail -n 160 /var/log/shadowsocksr.log 2>/dev/null || true
+          REMOTE
